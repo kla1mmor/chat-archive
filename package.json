@@ -45,7 +45,6 @@
     "appId": "app.chatarchive.viewer",
     "productName": "Архив чатов",
     "executableName": "ChatArchive",
-    "artifactName": "ChatArchive-${version}-${arch}-${target}.${ext}",
     "directories": {
       "output": "release"
     },
@@ -75,7 +74,11 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "Архив чатов"
+      "shortcutName": "Архив чатов",
+      "artifactName": "ChatArchive-windows-setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "ChatArchive-windows-portable.${ext}"
     }
   }
 }

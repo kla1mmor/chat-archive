@@ -65,8 +65,7 @@ jobs:
         shell: bash
         run: |
           mkdir out
-          cp release/*-nsis.exe out/ChatArchive-windows-setup.exe
-          cp release/*-portable.exe out/ChatArchive-windows-portable.exe
+          cp release/ChatArchive-windows-setup.exe release/ChatArchive-windows-portable.exe out/
       - uses: actions/upload-artifact@v5
         with: { name: windows, path: out/* }
 
