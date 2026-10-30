@@ -16,23 +16,23 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with: { name: web, path: dist }
 
   android:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with: { node-version: 22, cache: npm }
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with: { distribution: temurin, java-version: 21 }
       - run: npm ci
       - run: npm run build && npx cap sync android
@@ -40,34 +40,42 @@ jobs:
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon
       - run: cp android/app/build/outputs/apk/release/app-release.apk ChatArchive-android.apk
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with: { name: android, path: ChatArchive-android.apk }
 
   windows:
     needs: test
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: npm run build
-      - run: npx electron-builder --win --publish never
+      - name: Build installers
+        shell: bash
+        run: |
+          set -o pipefail
+          npx electron-builder --win --publish never 2>&1 | tee builder.log || {
+            # Surface the tail of the log as annotations so it is visible without log access.
+            tail -n 40 builder.log | while IFS= read -r line; do echo "::error::${line}"; done
+            exit 1
+          }
       - name: Collect installers
         shell: bash
         run: |
           mkdir out
           cp release/*-nsis.exe out/ChatArchive-windows-setup.exe
           cp release/*-portable.exe out/ChatArchive-windows-portable.exe
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with: { name: windows, path: out/* }
 
   ios:
     needs: test
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: npm run build && npx cap sync ios
@@ -81,14 +89,14 @@ jobs:
           mkdir Payload
           cp -R ios-build/Build/Products/Release-iphoneos/App.app Payload/
           zip -qr ChatArchive-ios-unsigned.ipa Payload
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with: { name: ios, path: ChatArchive-ios-unsigned.ipa }
 
   release:
     needs: [android, windows, ios]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with: { path: artifacts }
       - name: Publish "latest" release
         env:
