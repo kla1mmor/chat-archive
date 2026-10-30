@@ -20,8 +20,8 @@ interface RemoteVersion {
 }
 
 interface DesktopBridge {
-  getText(url: string): Promise<string>;
-  installUpdate(url: string, build: number): Promise<void>;
+  checkVersion(): Promise<RemoteVersion>;
+  installUpdate(build: number): Promise<void>;
   restart(): void;
 }
 
@@ -32,7 +32,7 @@ export const canSelfUpdate = () => !!desktop || Capacitor.isNativePlatform();
 async function fetchRemote(): Promise<RemoteVersion | null> {
   const url = `${UPDATE_BASE}version.json?t=${Date.now()}`;
   try {
-    if (desktop) return JSON.parse(await desktop.getText(url));
+    if (desktop) return await desktop.checkVersion();
     // Native HTTP: github.com download links don't send CORS headers.
     const res = await CapacitorHttp.get({ url, responseType: 'json' });
     if (res.status !== 200) return null;
@@ -58,7 +58,7 @@ export async function checkForUpdate(onState: (s: UpdateState) => void) {
   if (desktop) {
     onState({ kind: 'downloading', build: remote.build });
     try {
-      await desktop.installUpdate(`${UPDATE_BASE}web-bundle.zip`, remote.build);
+      await desktop.installUpdate(remote.build);
       onState({ kind: 'ready', build: remote.build });
     } catch (e) {
       console.warn('Update download failed', e);

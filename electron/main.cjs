@@ -8,7 +8,8 @@ const { pathToFileURL } = require('node:url');
 const { unzipSync } = require('fflate');
 
 const BUNDLED = path.join(__dirname, '..', 'dist');
-const UPDATES_URL = 'https://github.com/kla1mmor/chat-archive/releases/download/latest/';
+const UPDATES_URL =
+  process.env.CHAT_ARCHIVE_UPDATES_URL || 'https://github.com/kla1mmor/chat-archive/releases/download/latest/';
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
@@ -59,16 +60,14 @@ function createWindow() {
   win.loadURL('app://archive/index.html');
 }
 
-ipcMain.handle('update:get-text', async (_e, url) => {
-  if (!String(url).startsWith(UPDATES_URL)) throw new Error('URL not allowed');
-  const res = await net.fetch(url);
+ipcMain.handle('update:check', async () => {
+  const res = await net.fetch(`${UPDATES_URL}version.json?t=${Date.now()}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.text();
+  return res.json();
 });
 
-ipcMain.handle('update:install', async (_e, url, build) => {
-  if (!String(url).startsWith(UPDATES_URL)) throw new Error('URL not allowed');
-  const res = await net.fetch(url);
+ipcMain.handle('update:install', async (_e, build) => {
+  const res = await net.fetch(`${UPDATES_URL}web-bundle.zip?b=${Number(build)}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const files = unzipSync(new Uint8Array(await res.arrayBuffer()));
   if (!files['index.html']) throw new Error('Bundle has no index.html');
