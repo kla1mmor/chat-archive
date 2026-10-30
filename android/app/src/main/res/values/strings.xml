@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Архив чатов</string>
+    <string name="title_activity_main">Архив чатов</string>
+    <string name="package_name">app.chatarchive.viewer</string>
+    <string name="custom_url_scheme">app.chatarchive.viewer</string>
+</resources>

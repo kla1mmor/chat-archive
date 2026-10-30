@@ -1,0 +1,104 @@
+name: Build apps
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with: { name: web, path: dist }
+
+  android:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - run: npm ci
+      - run: npm run build && npx cap sync android
+      - name: Build APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+      - run: cp android/app/build/outputs/apk/release/app-release.apk ChatArchive-android.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: android, path: ChatArchive-android.apk }
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run build
+      - run: npx electron-builder --win --publish never
+      - name: Collect installers
+        shell: bash
+        run: |
+          mkdir out
+          cp release/*-nsis.exe out/ChatArchive-windows-setup.exe
+          cp release/*-portable.exe out/ChatArchive-windows-portable.exe
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: out/* }
+
+  ios:
+    needs: test
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run build && npx cap sync ios
+      - name: Build unsigned app
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath ios-build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+      - name: Package .ipa
+        run: |
+          mkdir Payload
+          cp -R ios-build/Build/Products/Release-iphoneos/App.app Payload/
+          zip -qr ChatArchive-ios-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with: { name: ios, path: ChatArchive-ios-unsigned.ipa }
+
+  release:
+    needs: [android, windows, ios]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - name: Publish "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest --target "$GITHUB_SHA" --title "Архив чатов (сборка ${GITHUB_RUN_NUMBER})" --notes "
+          - **Windows**: ChatArchive-windows-setup.exe (установщик) или ChatArchive-windows-portable.exe (без установки).
+          - **Android**: ChatArchive-android.apk. Откройте файл на телефоне и разрешите установку из этого источника.
+          - **iPhone**: ChatArchive-ios-unsigned.ipa. Устанавливается через Sideloadly или AltStore с вашим Apple ID (см. README).
+          " \
+            artifacts/android/*.apk artifacts/windows/*.exe artifacts/ios/*.ipa

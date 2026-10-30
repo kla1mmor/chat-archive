@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { getMedia } from '../db';
+import { saveFile } from '../native';
 import { duration, fileSize } from '../format';
 import type { StoredMessage } from '../types';
+import { AudioPlayer, RoundVideo, TgsSticker, VideoSticker } from './Players';
 
 /** Object URL for a stored media file; null while loading, '' if missing. */
 export function useMediaUrl(chatKey: string, path?: string): string | null {
@@ -76,17 +78,18 @@ export function MediaContent({
 
   switch (m.media_type) {
     case 'sticker': {
-      if (missing || /\.tgs$/i.test(m.file ?? '')) {
-        // Animated .tgs stickers need a Lottie player; show the emoji instead.
+      const file = m.file ?? '';
+      if (missing)
         return thumb ? (
           <img className="sticker" src={thumb} alt={m.sticker_emoji} />
         ) : (
           <div className="sticker sticker-emoji">{m.sticker_emoji ?? '🖼'}</div>
         );
-      }
-      if (/\.webm$/i.test(m.file ?? ''))
-        return url ? <video className="sticker" src={url} autoPlay loop muted playsInline /> : null;
-      return url ? <img className="sticker" src={url} alt={m.sticker_emoji} /> : null;
+      if (/\.tgs$/i.test(file) || m.mime_type === 'application/x-tgsticker')
+        return <TgsSticker chatKey={chatKey} path={file} emoji={m.sticker_emoji} thumb={thumb || undefined} />;
+      if (/\.webm$/i.test(file) || m.mime_type === 'video/webm')
+        return url ? <VideoSticker url={url} thumb={thumb || undefined} emoji={m.sticker_emoji} /> : <div className="sticker" />;
+      return url ? <img className="sticker" src={url} alt={m.sticker_emoji} /> : <div className="sticker" />;
     }
     case 'animation': {
       const size = boxSize(m.width, m.height);
@@ -126,29 +129,39 @@ export function MediaContent({
     }
     case 'video_message':
       if (missing) return <Missing label="⏺ Видеосообщение" size={{ width: 220, height: 220 }} />;
-      return url ? <RoundVideo url={url} poster={thumb || undefined} /> : <div className="round-video" />;
+      return url ? (
+        <RoundVideo url={url} poster={thumb || undefined} seconds={m.duration_seconds} />
+      ) : (
+        <div className="round-video" />
+      );
     case 'voice_message':
-      return (
-        <div className="audio-row">
-          <span className="audio-icon">🎤</span>
-          {missing ? (
+      if (missing)
+        return (
+          <div className="player voice">
+            <span className="play-btn disabled">🎤</span>
             <span className="muted">Голосовое {duration(m.duration_seconds)} · нет в экспорте</span>
-          ) : (
-            url && <audio src={url} controls preload="metadata" />
-          )}
-        </div>
+          </div>
+        );
+      return (
+        <AudioPlayer chatKey={chatKey} path={m.file!} mime={m.mime_type} seconds={m.duration_seconds} variant="voice" />
       );
     case 'audio_file':
       return (
         <div className="audio-file">
           <div className="audio-title">
-            🎵 {m.performer ? `${m.performer} — ` : ''}
+            {m.performer ? `${m.performer} — ` : ''}
             {m.title ?? m.file_name ?? 'Аудио'}
           </div>
           {missing ? (
             <span className="muted">нет в экспорте · {duration(m.duration_seconds)}</span>
           ) : (
-            url && <audio src={url} controls preload="metadata" />
+            <AudioPlayer
+              chatKey={chatKey}
+              path={m.file!}
+              mime={m.mime_type}
+              seconds={m.duration_seconds}
+              variant="music"
+            />
           )}
         </div>
       );
@@ -157,33 +170,19 @@ export function MediaContent({
   const name = m.file_name ?? m.file?.split('/').pop() ?? 'Файл';
   const ext = (name.split('.').pop() ?? '').slice(0, 4).toUpperCase();
   return (
-    <a
+    <button
       className={missing ? 'file-row missing' : 'file-row'}
-      href={url || undefined}
-      download={name}
-      onClick={(e) => missing && e.preventDefault()}
+      disabled={missing}
+      onClick={async () => {
+        const blob = await getMedia(chatKey, m.file!);
+        if (blob) saveFile(blob, name).catch((e) => console.warn('Save failed', e));
+      }}
     >
       <span className="file-icon">{ext || '📄'}</span>
       <span className="file-meta">
         <span className="file-name">{name}</span>
         <span className="muted">{missing ? 'не включено в экспорт' : fileSize(m.file_size)}</span>
       </span>
-    </a>
-  );
-}
-
-function RoundVideo({ url, poster }: { url: string; poster?: string }) {
-  return (
-    <video
-      className="round-video"
-      src={url}
-      poster={poster}
-      playsInline
-      onClick={(e) => {
-        const v = e.currentTarget;
-        if (v.paused) v.play();
-        else v.pause();
-      }}
-    />
+    </button>
   );
 }

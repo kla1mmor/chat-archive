@@ -1004,3 +1004,109 @@ audio {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ---------- players ---------- */
+.player {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+  margin: 2px 0;
+}
+.play-btn {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 50%;
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.out .play-btn {
+  background: var(--meta-out);
+}
+.play-btn.disabled {
+  background: var(--muted);
+  cursor: default;
+}
+.player-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.track {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(51, 144, 236, 0.25);
+  cursor: pointer;
+  overflow: hidden;
+}
+.out .track {
+  background: rgba(79, 174, 78, 0.3);
+}
+.track-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+}
+.out .track-fill {
+  background: var(--meta-out);
+}
+
+.round-wrap {
+  position: relative;
+  width: 220px;
+  height: 220px;
+}
+.round-ring {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform: rotate(-90deg);
+}
+.round-ring circle {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.9);
+  stroke-width: 4;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.25s linear;
+}
+.round-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  pointer-events: none;
+}
+.round-time {
+  top: auto;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.sticker svg {
+  display: block;
+}
+button.file-row {
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}

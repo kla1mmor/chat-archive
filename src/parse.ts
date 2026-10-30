@@ -1,4 +1,4 @@
-import JSZip from 'jszip';
+import { BlobReader, BlobWriter, ZipReader } from '@zip.js/zip.js';
 import type { ParsedChat, TgChatExport, TgMessage } from './types';
 
 type Loader = () => Promise<Blob>;
@@ -19,21 +19,40 @@ function dirname(p: string) {
   return i < 0 ? '' : p.slice(0, i + 1);
 }
 
-/** Reads whatever the user picked: a folder, loose files, a .zip, or result.json. */
+/**
+ * Reads whatever the user picked: a folder, loose files, a .zip, or result.json.
+ * ZIPs are read lazily: only the central directory up front, then one entry at a
+ * time when it is stored, so multi-gigabyte archives work on phones too.
+ */
 export async function readExport(files: File[]): Promise<ParsedChat[]> {
   const table: FileTable = new Map();
   for (const f of files) {
-    if (/\.zip$/i.test(f.name)) {
-      const zip = await JSZip.loadAsync(f);
-      zip.forEach((path, entry) => {
-        if (!entry.dir) table.set(norm(path), () => entry.async('blob'));
-      });
+    if (await isZip(f)) {
+      const reader = new ZipReader(new BlobReader(f));
+      let entries;
+      try {
+        entries = await reader.getEntries();
+      } catch {
+        throw new ImportError(`Не удалось открыть архив ${f.name}. Возможно, он повреждён или загружен не до конца.`);
+      }
+      for (const entry of entries) {
+        if (entry.directory || !entry.getData) continue;
+        if (entry.encrypted) throw new ImportError('Архив защищён паролем. Создайте ZIP без пароля.');
+        table.set(norm(entry.filename), () => entry.getData!(new BlobWriter()));
+      }
     } else {
       const rel = (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
       table.set(norm(rel), async () => f);
     }
   }
   return parseTable(table);
+}
+
+async function isZip(f: File) {
+  if (/\.zip$/i.test(f.name)) return true;
+  if (/\.json$/i.test(f.name) || (f as File & { webkitRelativePath?: string }).webkitRelativePath) return false;
+  const head = new Uint8Array(await f.slice(0, 4).arrayBuffer());
+  return head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04;
 }
 
 export async function parseTable(table: FileTable): Promise<ParsedChat[]> {

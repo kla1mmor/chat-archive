@@ -9,6 +9,8 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 );
 
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
+// The installed Windows/Android/iOS apps ship their files locally and need no service worker.
+const isNativeShell = 'Capacitor' in window || location.protocol === 'app:';
+if ('serviceWorker' in navigator && import.meta.env.PROD && !isNativeShell) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
 }

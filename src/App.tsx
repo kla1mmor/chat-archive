@@ -51,6 +51,19 @@ export function App() {
     refresh();
   }, [refresh]);
 
+  // Only one voice message / video plays at a time, like in messengers.
+  useEffect(() => {
+    const onPlay = (e: Event) => {
+      const t = e.target as HTMLMediaElement;
+      if (t.muted) return;
+      document.querySelectorAll<HTMLMediaElement>('audio, video').forEach((el) => {
+        if (el !== t && !el.muted && !el.paused) el.pause();
+      });
+    };
+    document.addEventListener('play', onPlay, true);
+    return () => document.removeEventListener('play', onPlay, true);
+  }, []);
+
   const handleFiles = async (files: File[]) => {
     if (files.length === 0) return;
     setError(null);
@@ -66,6 +79,24 @@ export function App() {
       setReading(false);
     }
   };
+
+  // Opening a chat adds a history entry, so the Android back button and the
+  // browser's Back return to the chat list instead of leaving the app.
+  const openChat = (key: string) => {
+    if (history.state?.chat) history.replaceState({ chat: key }, '');
+    else history.pushState({ chat: key }, '');
+    setSelected(key);
+  };
+  const closeChat = () => {
+    if (history.state?.chat) history.back();
+    else setSelected(null);
+  };
+
+  useEffect(() => {
+    const onPop = () => setSelected(history.state?.chat ?? null);
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   const chat = chats.find((c) => c.key === selected) ?? null;
   const visible = chats.filter((c) => c.name.toLowerCase().includes(filter.trim().toLowerCase()));
@@ -98,7 +129,7 @@ export function App() {
             <button
               key={c.key}
               className={c.key === selected ? 'chat-item active' : 'chat-item'}
-              onClick={() => setSelected(c.key)}
+              onClick={() => openChat(c.key)}
             >
               <Avatar id={c.tgId ?? c.key} name={c.name} size={54} />
               <div className="chat-item-body">
@@ -153,7 +184,7 @@ export function App() {
           type="file"
           hidden
           multiple
-          accept=".zip,.json,application/zip,application/json"
+          accept=".zip,.json,application/zip,application/x-zip-compressed,application/json,application/octet-stream"
           onChange={(e) => {
             handleFiles([...(e.target.files ?? [])]);
             e.target.value = '';
@@ -166,11 +197,11 @@ export function App() {
           <ChatView
             key={`${chat.key}:${chat.updatedAt}`}
             chat={chat}
-            onBack={() => setSelected(null)}
+            onBack={closeChat}
             onChanged={refresh}
             onDelete={async () => {
               await deleteChat(chat.key);
-              setSelected(null);
+              closeChat();
               refresh();
             }}
           />
@@ -227,7 +258,7 @@ export function App() {
           onDone={async (key) => {
             setParsed(null);
             await refresh();
-            if (key) setSelected(key);
+            if (key) openChat(key);
           }}
         />
       )}
