@@ -97,6 +97,10 @@ jobs:
     steps:
       - uses: actions/download-artifact@v5
         with: { path: artifacts }
+      - name: Package web bundle for over-the-air updates
+        run: |
+          (cd artifacts/web && zip -qr ../../web-bundle.zip .)
+          cp artifacts/web/version.json version.json
       - name: Publish "latest" release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -107,5 +111,7 @@ jobs:
           - **Windows**: ChatArchive-windows-setup.exe (установщик) или ChatArchive-windows-portable.exe (без установки).
           - **Android**: ChatArchive-android.apk. Откройте файл на телефоне и разрешите установку из этого источника.
           - **iPhone**: ChatArchive-ios-unsigned.ipa. Устанавливается через Sideloadly или AltStore с вашим Apple ID (см. README).
+
+          Установленные приложения обновляются сами: web-bundle.zip и version.json скачивать не нужно.
           " \
-            artifacts/android/*.apk artifacts/windows/*.exe artifacts/ios/*.ipa
+            artifacts/android/*.apk artifacts/windows/*.exe artifacts/ios/*.ipa web-bundle.zip version.json

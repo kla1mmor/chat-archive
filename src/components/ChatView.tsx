@@ -4,6 +4,7 @@ import { count, dayLabel, fullDate, shortDate } from '../format';
 import { lastPreview, msgTime } from '../importer';
 import { chatTypeName } from '../parse';
 import type { StoredChat, StoredMessage } from '../types';
+import { ChatInfo } from './ChatInfo';
 import { Avatar, Message } from './Message';
 
 const PAGE = 100;
@@ -41,6 +42,7 @@ export function ChatView({
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<StoredMessage[] | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [people, setPeople] = useState<{ id: string; name: string; n: number }[] | null>(null);
   const [selfDismissed, setSelfDismissed] = useState(false);
 
@@ -204,7 +206,7 @@ export function ChatView({
     .join(' · ');
 
   return (
-    <section className="chat">
+    <section className={infoOpen ? 'chat with-info' : 'chat'}>
       <header className="chat-header">
         <button className="icon-btn back-btn" onClick={onBack} aria-label="Назад">
           ←
@@ -218,13 +220,13 @@ export function ChatView({
             onChange={(e) => setQuery(e.target.value)}
           />
         ) : (
-          <>
+          <button className="chat-title-btn" onClick={() => setInfoOpen(true)} title="Информация о чате">
             <Avatar id={chat.tgId ?? chat.key} name={chat.name} size={40} />
             <div className="chat-title">
               <div className="name">{chat.name}</div>
               <div className="muted small">{subtitle}</div>
             </div>
-          </>
+          </button>
         )}
         <button
           className="icon-btn"
@@ -348,6 +350,17 @@ export function ChatView({
         <button className="down-btn" aria-label="Вниз" onClick={loadLatest}>
           ↓
         </button>
+      )}
+
+      {infoOpen && (
+        <ChatInfo
+          chat={chat}
+          onClose={() => setInfoOpen(false)}
+          onJump={(id) => {
+            if (window.matchMedia('(max-width: 1100px)').matches) setInfoOpen(false);
+            jumpTo(id);
+          }}
+        />
       )}
 
       {lightbox && (

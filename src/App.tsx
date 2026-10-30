@@ -5,6 +5,8 @@ import { ImportError, readExport } from './parse';
 import type { ParsedChat, StoredChat } from './types';
 import { ChatView } from './components/ChatView';
 import { ImportDialog } from './components/ImportDialog';
+import { UpdateBanner } from './components/UpdateBanner';
+import { BUILD } from './version';
 import { Avatar } from './components/Message';
 
 async function filesFromDrop(dt: DataTransfer): Promise<File[]> {
@@ -124,6 +126,7 @@ export function App() {
             onChange={(e) => setFilter(e.target.value)}
           />
         </div>
+        <UpdateBanner />
         <div className="chat-list">
           {visible.map((c) => (
             <button
@@ -151,6 +154,7 @@ export function App() {
         <div className="sidebar-footer muted small">
           {count(chats.length, 'чат', 'чата', 'чатов')}
           {usage && ` · занято ${usage}`}
+          {BUILD > 0 && ` · версия ${BUILD}`}
         </div>
         <div className="fab-wrap">
           <details className="fab-menu">
