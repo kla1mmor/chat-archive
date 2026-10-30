@@ -1,0 +1,117 @@
+import JSZip from 'jszip';
+import type { ParsedChat, TgChatExport, TgMessage } from './types';
+
+type Loader = () => Promise<Blob>;
+
+/** Flat view of the picked files: export-relative path -> lazy blob. */
+type FileTable = Map<string, Loader>;
+
+const MEDIA_FIELDS = ['photo', 'file', 'thumbnail', 'contact_vcard'] as const;
+
+export class ImportError extends Error {}
+
+function norm(p: string) {
+  return p.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '');
+}
+
+function dirname(p: string) {
+  const i = p.lastIndexOf('/');
+  return i < 0 ? '' : p.slice(0, i + 1);
+}
+
+/** Reads whatever the user picked: a folder, loose files, a .zip, or result.json. */
+export async function readExport(files: File[]): Promise<ParsedChat[]> {
+  const table: FileTable = new Map();
+  for (const f of files) {
+    if (/\.zip$/i.test(f.name)) {
+      const zip = await JSZip.loadAsync(f);
+      zip.forEach((path, entry) => {
+        if (!entry.dir) table.set(norm(path), () => entry.async('blob'));
+      });
+    } else {
+      const rel = (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
+      table.set(norm(rel), async () => f);
+    }
+  }
+  return parseTable(table);
+}
+
+export async function parseTable(table: FileTable): Promise<ParsedChat[]> {
+  const jsonPaths = [...table.keys()].filter((p) => /(^|\/)result\.json$/i.test(p));
+  if (jsonPaths.length === 0) {
+    const hasHtml = [...table.keys()].some((p) => /messages\d*\.html$/i.test(p));
+    throw new ImportError(
+      hasHtml
+        ? 'Это экспорт в формате HTML. Сделайте экспорт заново и выберите формат «Машиночитаемый JSON».'
+        : 'Не найден файл result.json. Выберите папку экспорта Telegram, ZIP-архив с ней или сам result.json.',
+    );
+  }
+  const chats: ParsedChat[] = [];
+  for (const jsonPath of jsonPaths) {
+    const text = await (await table.get(jsonPath)!()).text();
+    let data: unknown;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new ImportError(`Файл ${jsonPath} повреждён или не является JSON.`);
+    }
+    chats.push(...parseResult(data, dirname(jsonPath), table));
+  }
+  return chats;
+}
+
+/** Handles both a single-chat export and a full account export. */
+export function parseResult(data: unknown, baseDir: string, table: FileTable): ParsedChat[] {
+  const d = data as Record<string, any>;
+  if (Array.isArray(d?.messages)) return [toParsed(d as TgChatExport, baseDir, table)];
+
+  const lists = [d?.chats?.list, d?.left_chats?.list].filter(Array.isArray) as TgChatExport[][];
+  if (lists.length === 0) throw new ImportError('В result.json нет чатов.');
+  const selfId = d?.personal_information?.user_id
+    ? `user${d.personal_information.user_id}`
+    : undefined;
+  return lists.flat().map((c) => ({ ...toParsed(c, baseDir, table), selfId }));
+}
+
+function toParsed(chat: TgChatExport, baseDir: string, table: FileTable): ParsedChat {
+  const media = new Map<string, Loader>();
+  const messages: TgMessage[] = [];
+  for (const m of chat.messages) {
+    if (typeof m?.id !== 'number') continue;
+    for (const field of MEDIA_FIELDS) {
+      const p = m[field];
+      if (typeof p !== 'string' || p.startsWith('(')) continue; // "(File not included...)"
+      const full = norm(baseDir + p);
+      const loader = table.get(full) ?? table.get(norm(p));
+      if (loader) media.set(norm(p), loader);
+    }
+    messages.push(m);
+  }
+  return {
+    tgId: typeof chat.id === 'number' ? chat.id : undefined,
+    name: chat.name || chatTypeName(chat.type) || 'Без названия',
+    type: chat.type ?? 'unknown',
+    messages,
+    media,
+  };
+}
+
+export function chatTypeName(type?: string) {
+  switch (type) {
+    case 'saved_messages':
+      return 'Избранное';
+    case 'personal_chat':
+      return 'Личный чат';
+    case 'bot_chat':
+      return 'Бот';
+    case 'private_group':
+    case 'private_supergroup':
+    case 'public_supergroup':
+      return 'Группа';
+    case 'private_channel':
+    case 'public_channel':
+      return 'Канал';
+    default:
+      return '';
+  }
+}
