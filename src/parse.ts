@@ -1,4 +1,5 @@
 import { BlobReader, BlobWriter, ZipReader } from '@zip.js/zip.js';
+import { parseHtmlPages } from './parseHtml';
 import type { ParsedChat, TgChatExport, TgMessage } from './types';
 
 type Loader = () => Promise<Blob>;
@@ -57,12 +58,21 @@ async function isZip(f: File) {
 
 export async function parseTable(table: FileTable): Promise<ParsedChat[]> {
   const jsonPaths = [...table.keys()].filter((p) => /(^|\/)result\.json$/i.test(p));
-  if (jsonPaths.length === 0) {
-    const hasHtml = [...table.keys()].some((p) => /messages\d*\.html$/i.test(p));
+  const jsonDirs = new Set(jsonPaths.map(dirname));
+
+  // HTML exports: every folder with messages*.html is one chat (pages in order).
+  const htmlDirs = new Map<string, { n: number; path: string }[]>();
+  for (const p of table.keys()) {
+    const m = p.match(/(^|\/)messages(\d*)\.html$/i);
+    if (!m || jsonDirs.has(dirname(p))) continue;
+    const list = htmlDirs.get(dirname(p)) ?? [];
+    list.push({ n: Number(m[2] || 1), path: p });
+    htmlDirs.set(dirname(p), list);
+  }
+
+  if (jsonPaths.length === 0 && htmlDirs.size === 0) {
     throw new ImportError(
-      hasHtml
-        ? 'Это экспорт в формате HTML. Сделайте экспорт заново и выберите формат «Машиночитаемый JSON».'
-        : 'Не найден файл result.json. Выберите папку экспорта Telegram, ZIP-архив с ней или сам result.json.',
+      'Не найден экспорт Telegram. Выберите папку экспорта, ZIP-архив с ней, result.json или messages.html.',
     );
   }
   const chats: ParsedChat[] = [];
@@ -75,6 +85,12 @@ export async function parseTable(table: FileTable): Promise<ParsedChat[]> {
       throw new ImportError(`Файл ${jsonPath} повреждён или не является JSON.`);
     }
     chats.push(...parseResult(data, dirname(jsonPath), table));
+  }
+  for (const [dir, pages] of [...htmlDirs].sort(([a], [b]) => a.localeCompare(b))) {
+    pages.sort((a, b) => a.n - b.n);
+    const html = await Promise.all(pages.map(async (p) => (await table.get(p.path)!()).text()));
+    const chat = parseHtmlPages(html);
+    if (chat.messages.length) chats.push(toParsed(chat, dir, table));
   }
   return chats;
 }

@@ -162,7 +162,7 @@ export function App() {
                 📁 Выбрать папку экспорта
               </button>
               <button className="menu-item" onClick={() => fileInput.current?.click()}>
-                🗜 Выбрать ZIP или result.json
+                🗜 Выбрать ZIP, result.json или messages.html
               </button>
             </div>
           </details>
@@ -184,7 +184,7 @@ export function App() {
           type="file"
           hidden
           multiple
-          accept=".zip,.json,application/zip,application/x-zip-compressed,application/json,application/octet-stream"
+          accept=".zip,.json,.html,application/zip,application/x-zip-compressed,application/json,text/html,application/octet-stream"
           onChange={(e) => {
             handleFiles([...(e.target.files ?? [])]);
             e.target.value = '';
@@ -216,7 +216,7 @@ export function App() {
                   нужном чате ⋮ → <b>Экспорт истории чата</b>.
                 </li>
                 <li>
-                  Отметьте фото, видео, голосовые и файлы. Формат: <b>«Машиночитаемый JSON»</b>.
+                  Отметьте фото, видео, голосовые и файлы. Подойдёт любой формат: <b>JSON</b> (точнее) или <b>HTML</b>.
                 </li>
                 <li>
                   Перетащите папку экспорта сюда или нажмите «+». На телефоне удобнее заархивировать папку в ZIP.

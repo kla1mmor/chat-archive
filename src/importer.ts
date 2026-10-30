@@ -11,11 +11,12 @@ function newKey() {
 
 /** Stored chats that a parsed chat is a re-import of. */
 export async function findExisting(chat: ParsedChat): Promise<StoredChat[]> {
-  if (chat.tgId !== undefined) return findChatsByTgId(chat.tgId);
+  // HTML exports carry no chat id, so chats without one are matched by name.
+  // This also lets a JSON export update a chat that was first imported from HTML.
   const db = await getDB();
-  return (await db.getAll('chats')).filter(
-    (c) => c.tgId === undefined && c.name === chat.name && c.type === chat.type,
-  );
+  const byName = (await db.getAll('chats')).filter((c) => c.tgId === undefined && c.name === chat.name);
+  if (chat.tgId === undefined) return byName;
+  return [...(await findChatsByTgId(chat.tgId)), ...byName];
 }
 
 function guessSelfId(chat: ParsedChat): string | undefined {

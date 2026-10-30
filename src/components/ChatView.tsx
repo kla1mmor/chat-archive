@@ -42,6 +42,7 @@ export function ChatView({
   const [results, setResults] = useState<StoredMessage[] | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [people, setPeople] = useState<{ id: string; name: string; n: number }[] | null>(null);
+  const [selfDismissed, setSelfDismissed] = useState(false);
 
   const listRef = useRef<HTMLDivElement>(null);
   const intent = useRef<ScrollIntent | null>(null);
@@ -165,9 +166,7 @@ export function ChatView({
     return () => window.removeEventListener('keydown', onKey);
   }, [lightbox]);
 
-  const openMenu = async () => {
-    setMenuOpen((v) => !v);
-    if (people) return;
+  const loadPeople = useCallback(async () => {
     const db = await getDB();
     const map = new Map<string, { id: string; name: string; n: number }>();
     let cursor = await db.transaction('messages').store.openCursor(chatRange(chat.key));
@@ -181,6 +180,16 @@ export function ChatView({
       cursor = await cursor.continue();
     }
     setPeople([...map.values()].sort((a, b) => b.n - a.n));
+  }, [chat.key]);
+
+  const askSelf = !chat.selfId && !isChannel && !selfDismissed;
+  useEffect(() => {
+    if (askSelf) loadPeople();
+  }, [askSelf, loadPeople]);
+
+  const openMenu = async () => {
+    setMenuOpen((v) => !v);
+    if (!people) loadPeople();
   };
 
   const setSelf = async (selfId: string) => {
@@ -259,6 +268,22 @@ export function ChatView({
           </div>
         )}
       </header>
+
+      {askSelf && people && people.length > 1 && (
+        <div className="self-banner">
+          <span>Какие сообщения ваши? Они будут справа.</span>
+          <div className="self-options">
+            {people.slice(0, 4).map((p) => (
+              <button key={p.id} className="chip" onClick={() => setSelf(p.id)}>
+                {p.name}
+              </button>
+            ))}
+            <button className="chip muted" onClick={() => setSelfDismissed(true)}>
+              Позже
+            </button>
+          </div>
+        </div>
+      )}
 
       {results && (
         <div className="search-results">
